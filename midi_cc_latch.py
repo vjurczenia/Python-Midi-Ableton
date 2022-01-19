@@ -17,82 +17,105 @@ import time
 from rtmidi.midiutil import open_midiinput, open_midioutput
 
 
-# todo: utilize logging instead of print
-log = logging.getLogger('midi_cc_latch')
+logger = logging.getLogger('midi_cc_latch')
 logging.basicConfig(level=logging.DEBUG)
 
-in_port = sys.argv[1] if len(sys.argv) > 1 else None
-out_port = sys.argv[2] if len(sys.argv) > 2 else None
+MAX_CC_VALUE = 127
 
-try:
-    # prompt if passed None
-    midiin, in_port_name = open_midiinput(in_port)
-    midiout, out_port_name = open_midioutput(out_port)
-except (EOFError, KeyboardInterrupt):
-    sys.exit()
 
-print("Entering main loop. Press Control-C to exit.")
-try:
-    timer = time.time()
-    latch = {}
-    latch_channel_cc_dict = {
-        'timer': None, 
-        'counter': 1, 
-        'latch': False, 
-        'value': 0
-        }
-    while True:
-        msg = midiin.get_message()
+class LatchChannelCC:
+    timer = None
+    counter = 1
+    latch = False
+    value = 0
 
-        if msg:
-            message, deltatime = msg
-            timer += deltatime
-            print("[In ][%s] @%0.6f %r" % (in_port_name, timer, message))
+    def flip_value(self):
+        self.value = 0 if self.value else MAX_CC_VALUE
 
-            channel, cc, value = message
 
-            if value == 127:
-                if channel in latch:
-                    if cc in latch[channel]:
-                        # todo: change cur_dict var name
-                        cur_dict = latch[channel][cc]
-                        if timer - cur_dict['timer'] < 0.25:
-                            cur_dict['counter'] += 1
-                            if cur_dict['counter'] == 3:
-                                cur_dict['latch'] = not cur_dict['latch']
-                                latch[channel][cc]['value'] = abs(latch[channel][cc]['value'] - value)
+def main():
+    in_port = sys.argv[1] if len(sys.argv) > 1 else None
+    out_port = sys.argv[2] if len(sys.argv) > 2 else None
 
-                                print(latch)
+    try:
+        # prompt if passed None
+        midiin, in_port_name = open_midiinput(in_port)
+        midiout, out_port_name = open_midioutput(out_port)
+    except (EOFError, KeyboardInterrupt):
+        sys.exit()
+
+    print("Entering main loop. Press Control-C to exit.")
+    try:
+        timer = time.time()
+        latch = {}
+        while True:
+            msg = midiin.get_message()
+
+            if msg:
+                message, deltatime = msg
+                timer += deltatime
+                log_in(in_port_name, timer, message)
+
+                channel, cc, value = message
+
+                if value == MAX_CC_VALUE:
+                    if channel in latch:
+                        if cc in latch[channel]:
+                            # todo: change cur_obj var name
+                            cur_obj = latch[channel][cc]
+                            if timer - cur_obj.timer < 0.25:
+                                cur_obj.counter += 1
+                                if cur_obj.counter == 3:
+                                    cur_obj.latch = not cur_obj.latch
+                                    cur_obj.flip_value()
+                                    logger.debug(f"channel: {channel} cc: {cc} latch: {cur_obj.latch}")
+                            else:
+                                cur_obj.counter = 1
                         else:
-                            cur_dict['counter'] = 1
+                            latch[channel][cc] = LatchChannelCC()
                     else:
-                        latch[channel][cc] = latch_channel_cc_dict.copy()
+                        latch[channel] = {cc: LatchChannelCC()}
+                    latch[channel][cc].timer = timer
+
+                # todo: clean up, change cur_latch name, streamline logic and references
+                cur_latch = False
+                if channel in latch and cc in latch[channel]:
+                    cur_latch = latch[channel][cc].latch
+
+                if cur_latch:
+                    if value == MAX_CC_VALUE:
+                        latch[channel][cc].flip_value()
+                        message[2] = latch[channel][cc].value
+                        midiout.send_message(message)
+                        log_out(out_port_name, timer, message)
                 else:
-                    latch[channel] = {cc: latch_channel_cc_dict.copy()}
-                latch[channel][cc]['timer'] = timer
-
-            # todo: clean up, change cur_latch name, streamline logic and references
-            cur_latch = False
-            if channel in latch and cc in latch[channel]:
-                cur_latch = latch[channel][cc]['latch']
-
-            if cur_latch:
-                if value == 127:
-                    latch[channel][cc]['value'] = abs(latch[channel][cc]['value'] - value)
-                    message[2] = latch[channel][cc]['value']
                     midiout.send_message(message)
-                    print("[Out][%s] @%0.6f %r" % (out_port_name, timer, message))
-            else:
-                midiout.send_message(message)
-                print("[Out][%s] @%0.6f %r" % (out_port_name, timer, message))
+                    log_out(out_port_name, timer, message)
 
 
-        time.sleep(0.01)
-except KeyboardInterrupt:
-    print('')
-finally:
-    print("Exit.")
-    midiin.close_port()
-    midiout.close_port()
-    del midiin
-    del midiout
+            time.sleep(0.01)
+    except KeyboardInterrupt:
+        print('')
+    finally:
+        print("Exit.")
+        midiin.close_port()
+        midiout.close_port()
+        del midiin
+        del midiout
+
+
+def log_in(port_name, timer, message):
+    log('IN ', port_name, timer, message)
+
+
+def log_out(port_name, timer, message):
+    log('OUT', port_name, timer, message)
+
+
+def log(in_out, port_name, timer, message):
+    format_string = "[%s][%s] @%0.6f %r"
+    logger.debug(format_string % (in_out, port_name, timer, message))
+
+
+if __name__ == '__main__':
+    main()
