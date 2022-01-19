@@ -1,3 +1,26 @@
+# python-midi-cc-latch
+
+A utility to help convert momentary buttons on a midi controller to latching ones.
+
+## Why:
+* The [midiplus x3 mini](https://www.midiplus.com.tw/en/product-detail/X3mini/) has buttons that can send midi cc. They send a value of 127 when pressed, but a value of 0 when released. This is fine for mapping to transport controls like play and stop in Ableton, but can't be used to, let's say, crank the reverb on an instrument (and leave it cranked).
+
+## How:
+* Ahmad Moussa's [readme](https://github.com/AhmadMoussa/Python-Midi-Ableton/blob/master/Readme.md) (below) has a general gist of what needs to be done, so I followed it then expanded upon it.
+* The script endlessly loops, listening for input. When it receives a cc value of 127, it updates some metadata in a helper dictionary. Using that data, it checks whether "a button has been triple clicked" then inverts the latch flag for that cc on that midi channel and keeps track of its value.
+* For all cc messages, if the latch flag is set for that cc on that channel, and the value coming in is 127, then just flip the value stored in the helper dict and return it. Ignore all other values.
+
+## Resources:
+* [python-rtmidi](https://github.com/SpotlightKid/python-rtmidi)
+  * Main library used.
+* [mido](https://github.com/mido/mido)
+  * Could be useful in the future. Gave me the idea to look for something like this when I found [this script](https://github.com/mungewell/mpd-utils/blob/master/utils/mpd218_pad2keys.py) in a [reddit thread](https://www.reddit.com/r/synthesizers/comments/c8awr8/free_midi_translator_for_win_10/).
+* [Python-Midi-Ableton](https://github.com/AhmadMoussa/Python-Midi-Ableton)
+  * It's just the readme but it was very helpful. The readme is included below for posterity.
+
+---
+---
+
 # Python-Midi-Ableton
 
 A tutorial on how to send midi signals from a python script to a midi track in ableton live
