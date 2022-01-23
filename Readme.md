@@ -2,6 +2,11 @@
 
 A utility to help convert momentary buttons on a midi controller to latching ones.
 
+## Build
+```
+pyinstaller -F -w .\midi_cc_latch.py
+```
+
 ## Why:
 * The [midiplus x3 mini](https://www.midiplus.com.tw/en/product-detail/X3mini/) has buttons that can send midi cc. They send a value of 127 when pressed, but a value of 0 when released. This is fine for mapping to transport controls like play and stop in Ableton, but can't be used to, let's say, crank the reverb on an instrument (and leave it cranked).
 
